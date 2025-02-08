@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buscaminas</title>
+</head>
+<body>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+    
+        #tablero {
+            display: grid;
+            grid-template-columns: repeat(8, 30px);
+            gap: 2px;
+        }
+    
+        .celda {
+            width: 30px;
+            height: 30px;
+            background-color: #ddd;
+            border: 1px solid #888;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+    
+        .celda:hover {
+            background-color: #ccc;
+        }
+    
+        .celda.revelada {
+            pointer-events: none;
+        }
+    </style>    
+
+    <label for="nivel">Selecciona el nivel:</label>
+    <select id="nivel">
+        <option value="">Ninguno</option>
+        <option value="facil">Fácil</option>
+        <option value="medio">Medio</option>
+        <option value="dificil">Difícil</option>
+    </select>
+
+    <div id="tablero"></div>
+
+    <script>
+        let juegoTerminado = false; // Variable para controlar el estado del juego
+    
+        function generarTablero(filas, columnas) {
+            var tablero = document.getElementById("tablero");
+            tablero.innerHTML = "";
+            juegoTerminado = false; // Reiniciar el estado del juego
+    
+            for (let i = 0; i < filas; i++) {
+                for (let j = 0; j < columnas; j++) {
+                    let celda = document.createElement("div");
+                    celda.className = "celda";
+                    celda.dataset.fila = i;
+                    celda.dataset.columna = j;
+    
+                    // Clic izquierdo: Revelar celda
+                    celda.addEventListener("click", async (e) => {
+                        if (juegoTerminado || e.target.classList.contains("marcada")) return;
+    
+                        const fila = e.target.dataset.fila;
+                        const columna = e.target.dataset.columna;
+    
+                        try {
+                            const response = await fetch("revelar_celda.php", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ fila, columna })
+                            });
+    
+                            if (!response.ok) throw new Error("Error en la respuesta del servidor");
+    
+                            const data = await response.json();
+    
+                            e.target.classList.add("revelada");
+                            const spanNumero = document.createElement("span");
+    
+                            if (data.valor === -1) { 
+                                spanNumero.textContent = "💣";
+                                e.target.appendChild(spanNumero);
+    
+                                // Revelar todas las minas si el jugador pierde
+                                if (data.gameOver) {
+                                    juegoTerminado = true;
+                                    data.minas.forEach(m => {
+                                        let minaCelda = document.querySelector(`[data-fila="${m.fila}"][data-columna="${m.columna}"]`);
+                                        minaCelda.innerHTML = "💣";
+                                        minaCelda.classList.add("revelada");
+                                    });
+                                }
+                            } else if (data.valor === 0) {
+                                e.target.style.backgroundColor = "gray";
+                            } else {
+                                spanNumero.style.color = coloresNumeros[data.valor - 1];
+                                spanNumero.textContent = data.valor;
+                                e.target.appendChild(spanNumero);
+                            }
+                        } catch (error) {
+                            console.error("Error:", error);
+                        }
+                    });
+    
+                    celda.addEventListener("contextmenu", (e) => {
+                        e.preventDefault();
+                        if (juegoTerminado || e.target.classList.contains("revelada")) return;
+    
+                        if (e.target.classList.contains("marcada")) {
+                            e.target.classList.remove("marcada");
+                            e.target.innerHTML = "";
+                        } else {
+                            e.target.classList.add("marcada");
+                            e.target.innerHTML = "🚩";
+                        }
+                    });
+    
+                    tablero.appendChild(celda);
+                }
+            }
+    
+            tablero.style.gridTemplateColumns = `repeat(${columnas}, 30px)`;
+        }
+    
+        const coloresNumeros = [
+            "blue", 
+            "green", 
+            "red", 
+            "purple", 
+            "maroon", 
+            "turquoise", 
+            "black", 
+            "gray"
+        ]
+    
+        document.querySelector("#nivel").addEventListener("change", async () => {
+            const nivel = document.getElementById("nivel").value;
+            let filas, columnas;
+    
+            switch (nivel) {
+                case "facil": filas = 8; columnas = 8; break;
+                case "medio": filas = 16; columnas = 16; break;
+                case "dificil": filas = 16; columnas = 30; break;
+                default: return;
+            }
+    
+            try {
+                const response = await fetch("generar_tablero.php", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ nivel })
+                });
+    
+                if (!response.ok) throw new Error("Error en la respuesta del servidor");
+    
+                const data = await response.json();
+                console.log(data);
+            } catch (error) {
+                console.error("Error:", error);
+            }
+    
+            generarTablero(filas, columnas);
+        });
+    </script>    
+</body>
+</html>
